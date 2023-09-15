@@ -2,6 +2,7 @@
 
 """Find Kconfig symbols that are referenced but not defined."""
 
+
 # (c) 2014-2015 Valentin Rothberg <valentinrothberg@gmail.com>
 # (c) 2014 Stefan Hengelein <stefan.hengelein@fau.de>
 #
@@ -19,7 +20,7 @@ from optparse import OptionParser
 OPERATORS = r"&|\(|\)|\||\!"
 FEATURE = r"(?:\w*[A-Z0-9]\w*){2,}"
 DEF = r"^\s*(?:menu){,1}config\s+(" + FEATURE + r")\s*"
-EXPR = r"(?:" + OPERATORS + r"|\s|" + FEATURE + r")+"
+EXPR = f"(?:{OPERATORS}" + r"|\s|" + FEATURE + r")+"
 DEFAULT = r"default\s+.*?(?:if\s.+){,1}"
 STMT = r"^\s*(?:if|select|depends\s+on|(?:" + DEFAULT + r"))\s+" + EXPR
 SOURCE_FEATURE = r"(?:\W|\b)+[D]{,1}CONFIG_(" + FEATURE + r")"
@@ -188,19 +189,14 @@ def execute(cmd):
 
 def find_commits(symbol, diff):
     """Find commits changing %symbol in the given range of %diff."""
-    commits = execute("git log --pretty=oneline --abbrev-commit -G %s %s"
-                      % (symbol, diff))
-    return commits
+    return execute(f"git log --pretty=oneline --abbrev-commit -G {symbol} {diff}")
 
 
 def tree_is_dirty():
     """Return true if the current working tree is dirty (i.e., if any file has
     been added, deleted, modified, renamed or copied but not committed)."""
     stdout = execute("git status --porcelain")
-    for line in stdout:
-        if re.findall(r"[URMADC]{1}", line[:2]):
-            return True
-    return False
+    return any(re.findall(r"[URMADC]{1}", line[:2]) for line in stdout)
 
 
 def get_head():
@@ -216,7 +212,7 @@ def check_symbols(ignore):
     source_files = []
     kconfig_files = []
     defined_features = set()
-    referenced_features = dict()  # {feature: [files]}
+    referenced_features = {}
 
     # use 'git ls-files' to get the worklist
     stdout = execute("git ls-files")
@@ -243,15 +239,14 @@ def check_symbols(ignore):
     for kfile in kconfig_files:
         if ignore and re.match(ignore, kfile):
             # do not collect references for files matching %ignore
-            parse_kconfig_file(kfile, defined_features, dict())
+            parse_kconfig_file(kfile, defined_features, {})
         else:
             parse_kconfig_file(kfile, defined_features, referenced_features)
 
     undefined = {}  # {feature: [files]}
     for feature in sorted(referenced_features):
         # filter some false positives
-        if feature == "FOO" or feature == "BAR" or \
-                feature == "FOO_BAR" or feature == "XXX":
+        if feature in ["FOO", "BAR", "FOO_BAR", "XXX"]:
             continue
         if feature not in defined_features:
             if feature.endswith("_MODULE"):
@@ -269,7 +264,7 @@ def parse_source_file(sfile, referenced_features):
         lines = stream.readlines()
 
     for line in lines:
-        if not "CONFIG_" in line:
+        if "CONFIG_" not in line:
             continue
         features = REGEX_SOURCE_FEATURE.findall(line)
         for feature in features:

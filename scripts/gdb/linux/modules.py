@@ -32,10 +32,14 @@ def module_list():
 
 
 def find_module_by_name(name):
-    for module in module_list():
-        if module['name'].string() == name:
-            return module
-    return None
+    return next(
+        (
+            module
+            for module in module_list()
+            if module['name'].string() == name
+        ),
+        None,
+    )
 
 
 class LxModule(gdb.Function):
@@ -49,11 +53,10 @@ of the target and return that module variable which MODULE matches."""
 
     def invoke(self, mod_name):
         mod_name = mod_name.string()
-        module = find_module_by_name(mod_name)
-        if module:
+        if module := find_module_by_name(mod_name):
             return module.dereference()
         else:
-            raise gdb.GdbError("Unable to find MODULE " + mod_name)
+            raise gdb.GdbError(f"Unable to find MODULE {mod_name}")
 
 
 LxModule()

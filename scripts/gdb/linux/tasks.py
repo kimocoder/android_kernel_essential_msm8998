@@ -40,10 +40,7 @@ def task_lists():
 
 
 def get_task_by_pid(pid):
-    for task in task_lists():
-        if int(task['pid']) == pid:
-            return task
-    return None
+    return next((task for task in task_lists() if int(task['pid']) == pid), None)
 
 
 class LxTaskByPidFunc(gdb.Function):
@@ -56,11 +53,10 @@ return that task_struct variable which PID matches."""
         super(LxTaskByPidFunc, self).__init__("lx_task_by_pid")
 
     def invoke(self, pid):
-        task = get_task_by_pid(pid)
-        if task:
+        if task := get_task_by_pid(pid):
             return task.dereference()
         else:
-            raise gdb.GdbError("No task of PID " + str(pid))
+            raise gdb.GdbError(f"No task of PID {str(pid)}")
 
 
 LxTaskByPidFunc()

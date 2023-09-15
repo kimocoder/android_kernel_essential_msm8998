@@ -111,60 +111,52 @@ class SystemValues:
 		self.hostname = platform.node()
 		if(self.hostname == ''):
 			self.hostname = 'localhost'
-		rtc = "rtc0"
-		if os.path.exists('/dev/rtc'):
-			rtc = os.readlink('/dev/rtc')
-		rtc = '/sys/class/rtc/'+rtc
-		if os.path.exists(rtc) and os.path.exists(rtc+'/date') and \
-			os.path.exists(rtc+'/time') and os.path.exists(rtc+'/wakealarm'):
+		rtc = os.readlink('/dev/rtc') if os.path.exists('/dev/rtc') else "rtc0"
+		rtc = f'/sys/class/rtc/{rtc}'
+		if (
+			os.path.exists(rtc)
+			and os.path.exists(f'{rtc}/date')
+			and os.path.exists(f'{rtc}/time')
+			and os.path.exists(f'{rtc}/wakealarm')
+		):
 			self.rtcpath = rtc
 	def setOutputFile(self):
-		if((self.htmlfile == '') and (self.dmesgfile != '')):
-			m = re.match('(?P<name>.*)_dmesg\.txt$', self.dmesgfile)
-			if(m):
+		if ((self.htmlfile == '') and (self.dmesgfile != '')):
+			if m := re.match('(?P<name>.*)_dmesg\.txt$', self.dmesgfile):
 				self.htmlfile = m.group('name')+'.html'
-		if((self.htmlfile == '') and (self.ftracefile != '')):
-			m = re.match('(?P<name>.*)_ftrace\.txt$', self.ftracefile)
-			if(m):
+		if ((self.htmlfile == '') and (self.ftracefile != '')):
+			if m := re.match('(?P<name>.*)_ftrace\.txt$', self.ftracefile):
 				self.htmlfile = m.group('name')+'.html'
 		if(self.htmlfile == ''):
 			self.htmlfile = 'output.html'
 	def initTestOutput(self, subdir):
-		if(not self.android):
+		if (not self.android):
 			self.prefix = self.hostname
 			v = open('/proc/version', 'r').read().strip()
-			kver = string.split(v)[2]
 		else:
 			self.prefix = 'android'
-			v = os.popen(self.adb+' shell cat /proc/version').read().strip()
-			kver = string.split(v)[2]
+			v = os.popen(f'{self.adb} shell cat /proc/version').read().strip()
+		kver = string.split(v)[2]
 		testtime = datetime.now().strftime('suspend-%m%d%y-%H%M%S')
-		if(subdir != "."):
-			self.testdir = subdir+"/"+testtime
-		else:
-			self.testdir = testtime
-		self.teststamp = \
-			'# '+testtime+' '+self.prefix+' '+self.suspendmode+' '+kver
-		self.dmesgfile = \
-			self.testdir+'/'+self.prefix+'_'+self.suspendmode+'_dmesg.txt'
-		self.ftracefile = \
-			self.testdir+'/'+self.prefix+'_'+self.suspendmode+'_ftrace.txt'
-		self.htmlfile = \
-			self.testdir+'/'+self.prefix+'_'+self.suspendmode+'.html'
+		self.testdir = f"{subdir}/{testtime}" if (subdir != ".") else testtime
+		self.teststamp = f'# {testtime} {self.prefix} {self.suspendmode} {kver}'
+		self.dmesgfile = f'{self.testdir}/{self.prefix}_{self.suspendmode}_dmesg.txt'
+		self.ftracefile = f'{self.testdir}/{self.prefix}_{self.suspendmode}_ftrace.txt'
+		self.htmlfile = f'{self.testdir}/{self.prefix}_{self.suspendmode}.html'
 		os.mkdir(self.testdir)
 	def setDeviceFilter(self, devnames):
 		self.devicefilter = string.split(devnames)
 	def rtcWakeAlarm(self):
-		os.system('echo 0 > '+self.rtcpath+'/wakealarm')
-		outD = open(self.rtcpath+'/date', 'r').read().strip()
-		outT = open(self.rtcpath+'/time', 'r').read().strip()
+		os.system(f'echo 0 > {self.rtcpath}/wakealarm')
+		outD = open(f'{self.rtcpath}/date', 'r').read().strip()
+		outT = open(f'{self.rtcpath}/time', 'r').read().strip()
 		mD = re.match('^(?P<y>[0-9]*)-(?P<m>[0-9]*)-(?P<d>[0-9]*)', outD)
 		mT = re.match('^(?P<h>[0-9]*):(?P<m>[0-9]*):(?P<s>[0-9]*)', outT)
 		if(mD and mT):
 			# get the current time from hardware
 			utcoffset = int((datetime.now() - datetime.utcnow()).total_seconds())
 			dt = datetime(\
-				int(mD.group('y')), int(mD.group('m')), int(mD.group('d')),
+					int(mD.group('y')), int(mD.group('m')), int(mD.group('d')),
 				int(mT.group('h')), int(mT.group('m')), int(mT.group('s')))
 			nowtime = int(dt.strftime('%s')) + utcoffset
 		else:
@@ -234,27 +226,87 @@ class Data:
 		self.idstr = idchar[num]
 		self.dmesgtext = []
 		self.phases = []
-		self.dmesg = { # fixed list of 10 phases
-			'suspend_prepare': {'list': dict(), 'start': -1.0, 'end': -1.0,
-								'row': 0, 'color': '#CCFFCC', 'order': 0},
-			        'suspend': {'list': dict(), 'start': -1.0, 'end': -1.0,
-								'row': 0, 'color': '#88FF88', 'order': 1},
-			   'suspend_late': {'list': dict(), 'start': -1.0, 'end': -1.0,
-								'row': 0, 'color': '#00AA00', 'order': 2},
-			  'suspend_noirq': {'list': dict(), 'start': -1.0, 'end': -1.0,
-								'row': 0, 'color': '#008888', 'order': 3},
-		    'suspend_machine': {'list': dict(), 'start': -1.0, 'end': -1.0,
-								'row': 0, 'color': '#0000FF', 'order': 4},
-			 'resume_machine': {'list': dict(), 'start': -1.0, 'end': -1.0,
-								'row': 0, 'color': '#FF0000', 'order': 5},
-			   'resume_noirq': {'list': dict(), 'start': -1.0, 'end': -1.0,
-								'row': 0, 'color': '#FF9900', 'order': 6},
-			   'resume_early': {'list': dict(), 'start': -1.0, 'end': -1.0,
-								'row': 0, 'color': '#FFCC00', 'order': 7},
-			         'resume': {'list': dict(), 'start': -1.0, 'end': -1.0,
-								'row': 0, 'color': '#FFFF88', 'order': 8},
-			'resume_complete': {'list': dict(), 'start': -1.0, 'end': -1.0,
-								'row': 0, 'color': '#FFFFCC', 'order': 9}
+		self.dmesg = {
+			'suspend_prepare': {
+				'list': {},
+				'start': -1.0,
+				'end': -1.0,
+				'row': 0,
+				'color': '#CCFFCC',
+				'order': 0,
+			},
+			'suspend': {
+				'list': {},
+				'start': -1.0,
+				'end': -1.0,
+				'row': 0,
+				'color': '#88FF88',
+				'order': 1,
+			},
+			'suspend_late': {
+				'list': {},
+				'start': -1.0,
+				'end': -1.0,
+				'row': 0,
+				'color': '#00AA00',
+				'order': 2,
+			},
+			'suspend_noirq': {
+				'list': {},
+				'start': -1.0,
+				'end': -1.0,
+				'row': 0,
+				'color': '#008888',
+				'order': 3,
+			},
+			'suspend_machine': {
+				'list': {},
+				'start': -1.0,
+				'end': -1.0,
+				'row': 0,
+				'color': '#0000FF',
+				'order': 4,
+			},
+			'resume_machine': {
+				'list': {},
+				'start': -1.0,
+				'end': -1.0,
+				'row': 0,
+				'color': '#FF0000',
+				'order': 5,
+			},
+			'resume_noirq': {
+				'list': {},
+				'start': -1.0,
+				'end': -1.0,
+				'row': 0,
+				'color': '#FF9900',
+				'order': 6,
+			},
+			'resume_early': {
+				'list': {},
+				'start': -1.0,
+				'end': -1.0,
+				'row': 0,
+				'color': '#FFCC00',
+				'order': 7,
+			},
+			'resume': {
+				'list': {},
+				'start': -1.0,
+				'end': -1.0,
+				'row': 0,
+				'color': '#FFFF88',
+				'order': 8,
+			},
+			'resume_complete': {
+				'list': {},
+				'start': -1.0,
+				'end': -1.0,
+				'row': 0,
+				'color': '#FFFFCC',
+				'order': 9,
+			},
 		}
 		self.phases = self.sortedPhases()
 	def getStart(self):
@@ -293,14 +345,13 @@ class Data:
 			list = self.dmesg[phase]['list']
 			for dev in list:
 				d = list[dev]
-				if(d['pid'] == pid and time >= d['start'] and
+				if (d['pid'] == pid and time >= d['start'] and
 					time <= d['end']):
 					e = TraceEvent(action, name, color, time)
 					if('traceevents' not in d):
 						d['traceevents'] = []
 					d['traceevents'].append(e)
 					return d
-					break
 		return 0
 	def capIntraDevTraceEvent(self, action, name, pid, time):
 		for phase in self.phases:
@@ -319,20 +370,12 @@ class Data:
 							break
 					return
 	def trimTimeVal(self, t, t0, dT, left):
-		if left:
-			if(t > t0):
-				if(t - dT < t0):
-					return t0
-				return t - dT
-			else:
-				return t
+		if left and (t > t0):
+			return max(t - dT, t0)
+		elif left or t >= t0 + dT:
+			return t
 		else:
-			if(t < t0 + dT):
-				if(t > t0):
-					return t0 + dT
-				return t + dT
-			else:
-				return t
+			return t0 + dT if (t > t0) else t + dT
 	def trimTime(self, t0, dT, left):
 		self.tSuspended = self.trimTimeVal(self.tSuspended, t0, dT, left)
 		self.tResumed = self.trimTimeVal(self.tResumed, t0, dT, left)
@@ -393,12 +436,20 @@ class Data:
 			self.dmesg[phase]['order'] += 1
 		self.html_device_id += 1
 		devid = '%s%d' % (self.idstr, self.html_device_id)
-		list = dict()
-		list[devname] = \
-			{'start': start, 'end': end, 'pid': 0, 'par': '',
-			'length': (end-start), 'row': 0, 'id': devid, 'drv': '' };
+		list = {
+			devname: {
+				'start': start,
+				'end': end,
+				'pid': 0,
+				'par': '',
+				'length': end - start,
+				'row': 0,
+				'id': devid,
+				'drv': '',
+			}
+		}
 		self.dmesg[phasename] = \
-			{'list': list, 'start': start, 'end': end,
+				{'list': list, 'start': start, 'end': end,
 			'row': 0, 'color': color, 'order': 0}
 		self.phases = self.sortedPhases()
 	def newPhase(self, phasename, start, end, color, order):
@@ -412,9 +463,9 @@ class Data:
 		if(order < len(self.phases)):
 			p = self.phases[order]
 			self.dmesg[p]['start'] = end
-		list = dict()
+		list = {}
 		self.dmesg[phasename] = \
-			{'list': list, 'start': start, 'end': end,
+				{'list': list, 'start': start, 'end': end,
 			'row': 0, 'color': color, 'order': order}
 		self.phases = self.sortedPhases()
 	def setPhase(self, phase, ktime, isbegin):
@@ -428,22 +479,19 @@ class Data:
 		return sorted(self.dmesg, key=self.dmesgSortVal)
 	def sortedDevices(self, phase):
 		list = self.dmesg[phase]['list']
-		slist = []
-		tmp = dict()
+		tmp = {}
 		for devname in list:
 			dev = list[devname]
 			tmp[dev['start']] = devname
-		for t in sorted(tmp):
-			slist.append(tmp[t])
-		return slist
+		return [tmp[t] for t in sorted(tmp)]
 	def fixupInitcalls(self, phase, end):
 		# if any calls never returned, clip them at system resume end
 		phaselist = self.dmesg[phase]['list']
 		for devname in phaselist:
 			dev = phaselist[devname]
-			if(dev['end'] < 0):
+			if (dev['end'] < 0):
 				dev['end'] = end
-				vprint('%s (%s): callback didnt return' % (devname, phase))
+				vprint(f'{devname} ({phase}): callback didnt return')
 	def deviceFilter(self, devicefilter):
 		# remove all by the relatives of the filter devnames
 		filter = []
@@ -492,38 +540,24 @@ class Data:
 		self.html_device_id += 1
 		devid = '%s%d' % (self.idstr, self.html_device_id)
 		list = self.dmesg[phase]['list']
-		length = -1.0
-		if(start >= 0 and end >= 0):
-			length = end - start
+		length = end - start if (start >= 0 and end >= 0) else -1.0
 		list[name] = {'start': start, 'end': end, 'pid': pid, 'par': parent,
 					  'length': length, 'row': 0, 'id': devid, 'drv': drv }
 	def deviceIDs(self, devlist, phase):
-		idlist = []
 		list = self.dmesg[phase]['list']
-		for devname in list:
-			if devname in devlist:
-				idlist.append(list[devname]['id'])
-		return idlist
+		return [list[devname]['id'] for devname in list if devname in devlist]
 	def deviceParentID(self, devname, phase):
-		pdev = ''
 		pdevid = ''
 		list = self.dmesg[phase]['list']
-		if devname in list:
-			pdev = list[devname]['par']
-		if pdev in list:
-			return list[pdev]['id']
-		return pdev
+		pdev = list[devname]['par'] if devname in list else ''
+		return list[pdev]['id'] if pdev in list else pdev
 	def deviceChildren(self, devname, phase):
-		devlist = []
 		list = self.dmesg[phase]['list']
-		for child in list:
-			if(list[child]['par'] == devname):
-				devlist.append(child)
-		return devlist
+		return [child for child in list if (list[child]['par'] == devname)]
 	def deviceDescendants(self, devname, phase):
 		children = self.deviceChildren(devname, phase)
 		family = children
-		for child in children:
+		for child in family:
 			family += self.deviceDescendants(child, phase)
 		return family
 	def deviceChildrenIDs(self, devname, phase):
@@ -556,9 +590,9 @@ class Data:
 					if list[node.name]['drv']:
 						drv = ' {'+list[node.name]['drv']+'}'
 					info += ('<li>%s: %.3fms</li>' % (phase, (e-s)*1000))
-			html += '<li><b>'+node.name+drv+'</b>'
+			html += f'<li><b>{node.name}{drv}</b>'
 			if info:
-				html += '<ul>'+info+'</ul>'
+				html += f'<ul>{info}</ul>'
 			html += '</li>'
 		if len(node.children) > 0:
 			html += '<ul>'
@@ -629,7 +663,7 @@ class FTraceLine:
 	def __init__(self, t, m, d):
 		self.time = float(t)
 		# is this a trace event
-		if(d == 'traceevent' or re.match('^ *\/\* *(?P<msg>.*) \*\/ *$', m)):
+		if (d == 'traceevent' or re.match('^ *\/\* *(?P<msg>.*) \*\/ *$', m)):
 			if(d == 'traceevent'):
 				# nop format trace event
 				msg = m
@@ -638,8 +672,7 @@ class FTraceLine:
 				em = re.match('^ *\/\* *(?P<msg>.*) \*\/ *$', m)
 				msg = em.group('msg')
 
-			emm = re.match('^(?P<call>.*?): (?P<msg>.*)', msg)
-			if(emm):
+			if emm := re.match('^(?P<call>.*?): (?P<msg>.*)', msg):
 				self.name = emm.group('msg')
 				self.type = emm.group('call')
 			else:
@@ -656,28 +689,21 @@ class FTraceLine:
 		self.depth = self.getDepth(match.group('d'))
 		m = match.group('o')
 		# function return
-		if(m[0] == '}'):
+		if (m[0] == '}'):
 			self.freturn = True
-			if(len(m) > 1):
-				# includes comment with function name
-				match = re.match('^} *\/\* *(?P<n>.*) *\*\/$', m)
-				if(match):
+			if (len(m) > 1):
+				if match := re.match('^} *\/\* *(?P<n>.*) *\*\/$', m):
 					self.name = match.group('n')
-		# function call
 		else:
 			self.fcall = True
 			# function call with children
-			if(m[-1] == '{'):
-				match = re.match('^(?P<n>.*) *\(.*', m)
-				if(match):
+			if (m[-1] == '{'):
+				if match := re.match('^(?P<n>.*) *\(.*', m):
 					self.name = match.group('n')
-			# function call with no children (leaf)
-			elif(m[-1] == ';'):
+			elif (m[-1] == ';'):
 				self.freturn = True
-				match = re.match('^(?P<n>.*) *\(.*', m)
-				if(match):
+				if match := re.match('^(?P<n>.*) *\(.*', m):
 					self.name = match.group('n')
-			# something else (possibly a trace marker)
 			else:
 				self.name = m
 	def getDepth(self, str):
@@ -730,22 +756,19 @@ class FTraceCallGraph:
 			return True
 		if(self.invalid):
 			return False
-		if(len(self.list) >= 1000000 or self.depth < 0):
-			if(len(self.list) > 0):
+		if len(self.list) >= 1000000 or self.depth < 0:
+			if (len(self.list) > 0):
 				first = self.list[0]
-				self.list = []
-				self.list.append(first)
+				self.list = [first]
 			self.invalid = True
 			if(not match):
 				return False
-			id = 'task %s cpu %s' % (match.group('pid'), match.group('cpu'))
+			id = f"task {match.group('pid')} cpu {match.group('cpu')}"
 			window = '(%f - %f)' % (self.start, line.time)
-			if(self.depth < 0):
-				print('Too much data for '+id+\
-					' (buffer overflow), ignoring this callback')
+			if (self.depth < 0):
+				print(f'Too much data for {id} (buffer overflow), ignoring this callback')
 			else:
-				print('Too much data for '+id+\
-					' '+window+', ignoring this callback')
+				print(f'Too much data for {id} {window}, ignoring this callback')
 			return False
 		self.list.append(line)
 		if(self.start < 0):
@@ -771,7 +794,7 @@ class FTraceCallGraph:
 			count += 1
 		return minicg
 	def sanityCheck(self):
-		stack = dict()
+		stack = {}
 		cnt = 0
 		for l in self.list:
 			if(l.fcall and not l.freturn):
@@ -784,37 +807,34 @@ class FTraceCallGraph:
 				stack[l.depth] = 0
 				l.length = 0
 				cnt -= 1
-		if(cnt == 0):
-			return True
-		return False
+		return cnt == 0
 	def debugPrint(self, filename):
-		if(filename == 'stdout'):
+		if (filename == 'stdout'):
 			print('[%f - %f]') % (self.start, self.end)
 			for l in self.list:
 				if(l.freturn and l.fcall):
 					print('%f (%02d): %s(); (%.3f us)' % (l.time, \
-						l.depth, l.name, l.length*1000000))
+							l.depth, l.name, l.length*1000000))
 				elif(l.freturn):
 					print('%f (%02d): %s} (%.3f us)' % (l.time, \
-						l.depth, l.name, l.length*1000000))
+							l.depth, l.name, l.length*1000000))
 				else:
 					print('%f (%02d): %s() { (%.3f us)' % (l.time, \
-						l.depth, l.name, l.length*1000000))
+							l.depth, l.name, l.length*1000000))
 			print(' ')
 		else:
-			fp = open(filename, 'w')
-			print(filename)
-			for l in self.list:
-				if(l.freturn and l.fcall):
-					fp.write('%f (%02d): %s(); (%.3f us)\n' % (l.time, \
-						l.depth, l.name, l.length*1000000))
-				elif(l.freturn):
-					fp.write('%f (%02d): %s} (%.3f us)\n' % (l.time, \
-						l.depth, l.name, l.length*1000000))
-				else:
-					fp.write('%f (%02d): %s() { (%.3f us)\n' % (l.time, \
-						l.depth, l.name, l.length*1000000))
-			fp.close()
+			with open(filename, 'w') as fp:
+				print(filename)
+				for l in self.list:
+					if(l.freturn and l.fcall):
+						fp.write('%f (%02d): %s(); (%.3f us)\n' % (l.time, \
+								l.depth, l.name, l.length*1000000))
+					elif(l.freturn):
+						fp.write('%f (%02d): %s} (%.3f us)\n' % (l.time, \
+								l.depth, l.name, l.length*1000000))
+					else:
+						fp.write('%f (%02d): %s() { (%.3f us)\n' % (l.time, \
+								l.depth, l.name, l.length*1000000))
 
 # Class: Timeline
 # Description:
@@ -839,8 +859,7 @@ class Timeline:
 		self.scaleH = 100.0/float(self.maxrows)
 		self.height = self.maxrows*self.row_height_pixels
 		r = float(self.maxrows - 1)
-		if(r < 1.0):
-			r = 1.0
+		r = max(r, 1.0)
 		self.rowH = (100.0 - self.scaleH)/r
 
 # Class: TestRun
@@ -865,21 +884,19 @@ class TestRun:
 	data = 0
 	def __init__(self, dataobj):
 		self.data = dataobj
-		self.ftemp = dict()
-		self.ttemp = dict()
+		self.ftemp = {}
+		self.ttemp = {}
 	def isReady(self):
-		if(tracertype == '' or not data):
-			return False
-		return True
+		return bool(tracertype != '' and data)
 	def setTracerType(self, tracer):
 		self.tracertype = tracer
-		if(tracer == 'function_graph'):
+		if (tracer == 'function_graph'):
 			self.cgformat = True
 			self.ftrace_line_fmt = self.ftrace_line_fmt_fg
 		elif(tracer == 'nop'):
 			self.ftrace_line_fmt = self.ftrace_line_fmt_nop
 		else:
-			doError('Invalid tracer format: [%s]' % tracer, False)
+			doError(f'Invalid tracer format: [{tracer}]', False)
 
 # ----------------- FUNCTIONS --------------------
 
@@ -903,33 +920,34 @@ def initFtrace():
 	cf = 'dpm_run_callback'
 	if(sysvals.usetraceeventsonly):
 		cf = '-e dpm_prepare -e dpm_complete -e dpm_run_callback'
-	if(sysvals.usecallgraph or sysvals.usetraceevents):
+	if sysvals.usecallgraph or sysvals.usetraceevents:
 		print('INITIALIZING FTRACE...')
 		# turn trace off
-		os.system('echo 0 > '+tp+'tracing_on')
+		os.system(f'echo 0 > {tp}tracing_on')
 		# set the trace clock to global
-		os.system('echo global > '+tp+'trace_clock')
+		os.system(f'echo global > {tp}trace_clock')
 		# set trace buffer to a huge value
-		os.system('echo nop > '+tp+'current_tracer')
-		os.system('echo 100000 > '+tp+'buffer_size_kb')
+		os.system(f'echo nop > {tp}current_tracer')
+		os.system(f'echo 100000 > {tp}buffer_size_kb')
 		# initialize the callgraph trace, unless this is an x2 run
-		if(sysvals.usecallgraph and sysvals.execcount == 1):
+		if (sysvals.usecallgraph and sysvals.execcount == 1):
 			# set trace type
-			os.system('echo function_graph > '+tp+'current_tracer')
-			os.system('echo "" > '+tp+'set_ftrace_filter')
+			os.system(f'echo function_graph > {tp}current_tracer')
+			os.system(f'echo "" > {tp}set_ftrace_filter')
 			# set trace format options
-			os.system('echo funcgraph-abstime > '+tp+'trace_options')
-			os.system('echo funcgraph-proc > '+tp+'trace_options')
+			os.system(f'echo funcgraph-abstime > {tp}trace_options')
+			os.system(f'echo funcgraph-proc > {tp}trace_options')
 			# focus only on device suspend and resume
-			os.system('cat '+tp+'available_filter_functions | grep '+\
-				cf+' > '+tp+'set_graph_function')
-		if(sysvals.usetraceevents):
+			os.system(
+				f'cat {tp}available_filter_functions | grep {cf} > {tp}set_graph_function'
+			)
+		if sysvals.usetraceevents:
 			# turn trace events on
 			events = iter(sysvals.traceevents)
 			for e in events:
-				os.system('echo 1 > '+sysvals.epath+e+'/enable')
+				os.system(f'echo 1 > {sysvals.epath}{e}/enable')
 		# clear the trace buffer
-		os.system('echo "" > '+tp+'trace')
+		os.system(f'echo "" > {tp}' + 'trace')
 
 # Function: initFtraceAndroid
 # Description:
@@ -937,21 +955,20 @@ def initFtrace():
 def initFtraceAndroid():
 	global sysvals
 
-	tp = sysvals.tpath
-	if(sysvals.usetraceevents):
+	if sysvals.usetraceevents:
 		print('INITIALIZING FTRACE...')
+		tp = sysvals.tpath
 		# turn trace off
-		os.system(sysvals.adb+" shell 'echo 0 > "+tp+"tracing_on'")
+		os.system(f"{sysvals.adb} shell 'echo 0 > {tp}tracing_on'")
 		# set the trace clock to global
-		os.system(sysvals.adb+" shell 'echo global > "+tp+"trace_clock'")
+		os.system(f"{sysvals.adb} shell 'echo global > {tp}trace_clock'")
 		# set trace buffer to a huge value
-		os.system(sysvals.adb+" shell 'echo nop > "+tp+"current_tracer'")
-		os.system(sysvals.adb+" shell 'echo 10000 > "+tp+"buffer_size_kb'")
+		os.system(f"{sysvals.adb} shell 'echo nop > {tp}current_tracer'")
+		os.system(f"{sysvals.adb} shell 'echo 10000 > {tp}buffer_size_kb'")
 		# turn trace events on
 		events = iter(sysvals.traceevents)
 		for e in events:
-			os.system(sysvals.adb+" shell 'echo 1 > "+\
-				sysvals.epath+e+"/enable'")
+			os.system(f"{sysvals.adb} shell 'echo 1 > {sysvals.epath}{e}/enable'")
 		# clear the trace buffer
 		os.system(sysvals.adb+" shell 'echo \"\" > "+tp+"trace'")
 
@@ -974,13 +991,12 @@ def verifyFtrace():
 			'set_graph_function'
 		]
 	for f in files:
-		if(sysvals.android):
-			out = os.popen(sysvals.adb+' shell ls '+tp+f).read().strip()
+		if sysvals.android:
+			out = os.popen(f'{sysvals.adb} shell ls {tp}{f}').read().strip()
 			if(out != tp+f):
 				return False
-		else:
-			if(os.path.exists(tp+f) == False):
-				return False
+		elif (os.path.exists(tp+f) == False):
+			return False
 	return True
 
 # Function: parseStamp
@@ -1034,7 +1050,7 @@ def doesTraceLogHaveTraceEvents():
 	sysvals.usetraceeventsonly = True
 	sysvals.usetraceevents = False
 	for e in sysvals.traceevents:
-		out = os.popen('cat '+sysvals.ftracefile+' | grep "'+e+': "').read()
+		out = os.popen(f'cat {sysvals.ftracefile} | grep "{e}: "').read()
 		if(not out):
 			sysvals.usetraceeventsonly = False
 		if(e == 'suspend_resume' and out):

@@ -63,11 +63,9 @@ def cpu_mask_invalidate(event):
 
 def cpu_list(mask_name):
     global cpu_mask
-    mask = None
-    if mask_name in cpu_mask:
-        mask = cpu_mask[mask_name]
+    mask = cpu_mask[mask_name] if mask_name in cpu_mask else None
     if mask is None:
-        mask = gdb.parse_and_eval(mask_name + ".bits")
+        mask = gdb.parse_and_eval(f"{mask_name}.bits")
         if hasattr(gdb, 'events'):
             cpu_mask[mask_name] = mask
             gdb.events.stop.connect(cpu_mask_invalidate)
@@ -111,7 +109,7 @@ Note that VAR has to be quoted as string."""
         super(PerCpu, self).__init__("lx_per_cpu")
 
     def invoke(self, var_name, cpu=-1):
-        var_ptr = gdb.parse_and_eval("&" + var_name.string())
+        var_ptr = gdb.parse_and_eval(f"&{var_name.string()}")
         return per_cpu(var_ptr, cpu)
 
 

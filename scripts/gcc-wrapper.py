@@ -39,12 +39,12 @@ import subprocess
 # Note that gcc uses unicode, which may depend on the locale.  TODO:
 # force LANG to be set to en_US.UTF-8 to get consistent warnings.
 
-allowed_warnings = set([
+allowed_warnings = {
     "core.c:144",
     "inet_connection_sock.c:430",
     "inet_connection_sock.c:467",
     "inet6_connection_sock.c:89",
- ])
+}
 
 # Capture the name of the object file, can find it.
 ofile = None
