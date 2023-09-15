@@ -30,14 +30,14 @@ parser.add_option("-d", "--objdump", dest="objdump_name",
                   help="name of objdump executable (in path)")
 (options, args) = parser.parse_args()
 
-if (options.objdump_name == None):
+if options.objdump_name is None:
         sys.exit("No objdump executable specified - use -d or --objdump option")
 
 # initialize global dicts and regular expression
 
-build_ids = dict();
-mmaps = dict();
-disasm_cache = dict();
+build_ids = {};
+mmaps = {};
+disasm_cache = {};
 disasm_re = re.compile("^\s*([0-9a-fA-F]+):")
 
 cache_size = 16*1024

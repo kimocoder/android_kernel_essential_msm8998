@@ -26,7 +26,7 @@ def list_check(head):
         raise gdb.GdbError('argument must be of type (struct list_head [*])')
     c = head
     try:
-        gdb.write("Starting with: {}\n".format(c))
+        gdb.write(f"Starting with: {c}\n")
     except gdb.MemoryError:
         gdb.write('head is not accessible\n')
         return
@@ -72,7 +72,7 @@ def list_check(head):
         c = n
         nb += 1
         if c == head:
-            gdb.write("list is consistent: {} node(s)\n".format(nb))
+            gdb.write(f"list is consistent: {nb} node(s)\n")
             return
 
 
